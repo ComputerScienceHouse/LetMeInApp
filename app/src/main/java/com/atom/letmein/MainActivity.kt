@@ -79,16 +79,16 @@ class MainActivity : AppCompatActivity() {
                             "LOCATION" -> {
                                 if (idWS == 0) {
                                     idWS = it
-                                    sendPermanentPush("LetMeIn", "${getString(R.string.req_sent)} (45s)", it)
+                                    sendPermanentPush(getString(R.string.req_sent), "${getString(R.string.req_sent_exp)} (${response?.currentTime}s)", it)
                                 }
                             }
-                            "COUNTDOWN" -> updatePush("${getString(R.string.req_sent)} (${response?.currentTime}s)", it)
+                            "COUNTDOWN" -> updatePush("${getString(R.string.req_sent_exp)} (${response?.currentTime}s)", it)
                             "TIMEOUT" -> {
-                                sendTemporaryPush("LetMeIn", getString(R.string.req_timeout))
+                                sendTemporaryPush(getString(R.string.req_timeout), getString(R.string.req_timeout_exp))
                                 this.close()
                             }
                             "ACKNOWLEDGE" -> {
-                                sendTemporaryPush("LetMeIn", getString(R.string.req_ack))
+                                sendTemporaryPush(getString(R.string.req_ack), getString(R.string.req_ack_exp))
                                 this.close()
                             }
                         }
@@ -99,18 +99,18 @@ class MainActivity : AppCompatActivity() {
             override fun onClose(code: Int, reason: String?, remote: Boolean) {
                 println("Connection was closed! Reason: $reason")
                 notificationManager.cancel(idWS)
-                sendTemporaryPush("Error", getString(R.string.req_error))
             }
 
             override fun onError(ex: Exception?) {
                 println("Connection ran into an error: ${ex.toString()}")
                 ex?.printStackTrace()
                 notificationManager.cancel(idWS)
+                sendTemporaryPush(getString(R.string.req_error), getString(R.string.req_error_exp), 2024)
             }
         }
     }
 
-    fun sendPermanentPush(title: String, description: String, code: Int = 2023) {
+    fun sendPermanentPush(subject: String, description: String, code: Int = 2023) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             notificationChannel =
                 NotificationChannel(channelId, description, NotificationManager.IMPORTANCE_HIGH)
@@ -123,18 +123,21 @@ class MainActivity : AppCompatActivity() {
         }
         builder.setSmallIcon(R.drawable.csh_logo)
             .setLargeIcon(BitmapFactory.decodeResource(this.resources, R.drawable.csh_logo))
+            .setContentTitle(subject)
             .setContentText(description)
-            .setContentTitle(title)
             .setAutoCancel(false)
             .setOngoing(true)
             .setOnlyAlertOnce(true)
+            .setColor(Color.MAGENTA)
+            .style = Notification.BigTextStyle()
+            .bigText(description)
         notificationManager.notify(code, builder.build())
     }
 
-    fun sendTemporaryPush(title: String, description: String, code: Int = 2023) {
+    fun sendTemporaryPush(subject: String, description: String, code: Int = 2023) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             notificationChannel =
-                NotificationChannel(channelId, description, NotificationManager.IMPORTANCE_HIGH)
+                NotificationChannel(channelId, description, NotificationManager.IMPORTANCE_LOW)
             notificationChannel.lightColor = Color.MAGENTA
             notificationManager.createNotificationChannel(notificationChannel)
 
@@ -144,13 +147,18 @@ class MainActivity : AppCompatActivity() {
         }
         builder.setSmallIcon(R.drawable.csh_logo)
             .setLargeIcon(BitmapFactory.decodeResource(this.resources, R.drawable.csh_logo))
+            .setContentTitle(subject)
             .setContentText(description)
-            .setContentTitle(title)
+            .setColor(Color.MAGENTA)
+            .style = Notification.BigTextStyle()
+            .bigText(description)
         notificationManager.notify(code, builder.build())
     }
 
     fun updatePush(description: String, code: Int = 2023) {
         builder.setContentText(description)
+            .style = Notification.BigTextStyle()
+            .bigText(description)
         notificationManager.notify(code, builder.build())
     }
 
