@@ -12,13 +12,14 @@ import android.os.Bundle
 import android.view.View
 import android.widget.EditText
 import androidx.appcompat.app.AlertDialog
-import com.squareup.moshi.JsonAdapter
-import com.squareup.moshi.JsonClass
-import com.squareup.moshi.Moshi
+import com.beust.klaxon.Json
 import org.java_websocket.client.WebSocketClient
 import org.java_websocket.handshake.ServerHandshake
 import java.lang.Exception
 import java.net.URI
+import com.beust.klaxon.*
+
+private val klaxon = Klaxon()
 
 class MainActivity : AppCompatActivity() {
     lateinit var notificationManager: NotificationManager
@@ -38,15 +39,28 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun initWebSocket(location: String) {
-        //val hostString = R.string.wsURI
-        val wsURL = "wss://letmein.csh.rit.edu/knock/socket/$location"
+        val hostString = getString(R.string.wsURI)
+        val wsURL = "wss://$hostString/knock/socket/$location"
         val wsURI: URI? = URI(wsURL)
 
+        if (findViewById<EditText>(R.id.userName).text.isEmpty()) {
+            showAlert("Error", "Missing name!")
+            return
+        }
+        if (this::webSocketClient.isInitialized) {
+            if (webSocketClient.isOpen) {
+                showAlert("Error", "There is already a request running!")
+                return
+            }
+        }
+
         createWebSocketClient(wsURI, location)
+        webSocketClient.connect()
     }
 
     private fun createWebSocketClient(wsURI: URI?, location: String) {
         webSocketClient = object : WebSocketClient(wsURI) {
+            var idWS: Int = 0
             override fun onOpen(handshakedata: ServerHandshake?) {
                 println("Connection opened!")
                 val name = findViewById<EditText>(R.id.userName).text
@@ -57,36 +71,50 @@ class MainActivity : AppCompatActivity() {
 
             override fun onMessage(message: String?) {
                 message?.let {
-                    val moshi = Moshi.Builder().build()
-                    val adapter: JsonAdapter<ServerResponse> = moshi.adapter(ServerResponse::class.java)
-                    val response = adapter.fromJson(message)
-                    when (response?.event) {
-                        "LOCATION" -> println("LOCATION")
-                        "COUNTDOWN" -> println("COUNTDOWN")
-                        "ACKNOWLEDGE" -> println("ACKNOWLEDGE")
-                        "TIMEOUT" -> println("TIMEOUT")
-                        else -> println("Unknown message received...")
+                    val response = ServerResponse.fromJson(message)
+                    println(response?.toJson())
+                    val id = response?.id?.split("_")?.last()?.toInt()
+                    id?.let {
+                        when (response?.event) {
+                            "LOCATION" -> {
+                                if (idWS == 0) {
+                                    idWS = it
+                                    sendPermanentPush("LetMeIn", "${getString(R.string.req_sent)} (45s)", it)
+                                }
+                            }
+                            "COUNTDOWN" -> updatePush("${getString(R.string.req_sent)} (${response?.currentTime}s)", it)
+                            "TIMEOUT" -> {
+                                sendTemporaryPush("LetMeIn", getString(R.string.req_timeout))
+                                this.close()
+                            }
+                            "ACKNOWLEDGE" -> {
+                                sendTemporaryPush("LetMeIn", getString(R.string.req_ack))
+                                this.close()
+                            }
+                        }
                     }
                 }
             }
 
             override fun onClose(code: Int, reason: String?, remote: Boolean) {
                 println("Connection was closed! Reason: $reason")
+                notificationManager.cancel(idWS)
+                sendTemporaryPush("Error", getString(R.string.req_error))
             }
 
             override fun onError(ex: Exception?) {
                 println("Connection ran into an error: ${ex.toString()}")
+                ex?.printStackTrace()
+                notificationManager.cancel(idWS)
             }
         }
     }
 
-    fun sendPush(title: String, description: String) {
+    fun sendPermanentPush(title: String, description: String, code: Int = 2023) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             notificationChannel =
                 NotificationChannel(channelId, description, NotificationManager.IMPORTANCE_HIGH)
-            notificationChannel.enableLights(true)
             notificationChannel.lightColor = Color.MAGENTA
-            notificationChannel.enableVibration(true)
             notificationManager.createNotificationChannel(notificationChannel)
 
             builder = Notification.Builder(this, channelId)
@@ -96,8 +124,36 @@ class MainActivity : AppCompatActivity() {
         builder.setSmallIcon(R.drawable.csh_logo)
             .setLargeIcon(BitmapFactory.decodeResource(this.resources, R.drawable.csh_logo))
             .setContentText(description)
-        notificationManager.notify(1234, builder.build())
+            .setContentTitle(title)
+            .setAutoCancel(false)
+            .setOngoing(true)
+            .setOnlyAlertOnce(true)
+        notificationManager.notify(code, builder.build())
     }
+
+    fun sendTemporaryPush(title: String, description: String, code: Int = 2023) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            notificationChannel =
+                NotificationChannel(channelId, description, NotificationManager.IMPORTANCE_HIGH)
+            notificationChannel.lightColor = Color.MAGENTA
+            notificationManager.createNotificationChannel(notificationChannel)
+
+            builder = Notification.Builder(this, channelId)
+        } else {
+            builder = Notification.Builder(this)
+        }
+        builder.setSmallIcon(R.drawable.csh_logo)
+            .setLargeIcon(BitmapFactory.decodeResource(this.resources, R.drawable.csh_logo))
+            .setContentText(description)
+            .setContentTitle(title)
+        notificationManager.notify(code, builder.build())
+    }
+
+    fun updatePush(description: String, code: Int = 2023) {
+        builder.setContentText(description)
+        notificationManager.notify(code, builder.build())
+    }
+
 
     fun showAlert(title: String, description: String) {
         val builder = AlertDialog.Builder(this)
@@ -112,70 +168,59 @@ class MainActivity : AppCompatActivity() {
 
     /** button events **/
     fun reqLWell(view: View) {
-        if (findViewById<EditText>(R.id.userName).text.isEmpty()) {
-            showAlert("Error", "Missing name!")
-            return
-        } else if (webSocketClient.isOpen) {
-            showAlert("Error", "Please wait before putting in another request!")
-            return
-        }
-        sendPush("LetMeIn", "Your request was sent!")
         initWebSocket("l_well")
-        webSocketClient.connect()
     }
 
     fun reqFirstElevator(view: View) {
-        if (findViewById<EditText>(R.id.userName).text.isEmpty()) {
-            showAlert("Error", "Missing name!")
-            return
-        } else if (webSocketClient.isOpen) {
-            showAlert("Error", "Please wait before putting in another request!")
-            return
-        }
-        sendPush("LetMeIn", "Your request was sent!")
         initWebSocket("level_1")
-        webSocketClient.connect()
     }
 
     fun reqAElevator(view: View) {
-        if (findViewById<EditText>(R.id.userName).text.isEmpty()) {
-            showAlert("Error", "Missing name!")
-            return
-        } else if (webSocketClient.isOpen) {
-            showAlert("Error", "Please wait before putting in another request!")
-            return
-        }
-        sendPush("LetMeIn", "Your request was sent!")
         initWebSocket("level_a")
-        webSocketClient.connect()
     }
 
     fun reqNorthStairwell(view: View) {
-        if (findViewById<EditText>(R.id.userName).text.isEmpty()) {
-            showAlert("Error", "Missing name!")
-            return
-        } else if (webSocketClient.isOpen) {
-            showAlert("Error", "Please wait before putting in another request!")
-            return
-        }
-        sendPush("LetMeIn", "Your request was sent!")
         initWebSocket("n_stairs")
-        webSocketClient.connect()
     }
 
     fun reqSouthStairwell(view: View) {
-        if (findViewById<EditText>(R.id.userName).text.isEmpty()) {
-            showAlert("Error", "Missing name!")
-            return
-        } else if (webSocketClient.isOpen) {
-            showAlert("Error", "Please wait before putting in another request!")
-            return
-        }
-        sendPush("LetMeIn", "Your request was sent!")
         initWebSocket("s_stairs")
-        webSocketClient.connect()
     }
 }
 
-@JsonClass(generateAdapter = true)
-data class ServerResponse(val event: String?, val name: String?, val id: String?)
+
+data class ServerResponse (
+    @Json(name = "ID")
+    val id: String,
+
+    @Json(name = "Event")
+    val event: String,
+
+    @Json(name = "CurrentTime")
+    val currentTime: Long,
+
+    @Json(name = "MaxTime")
+    val maxTime: Long,
+
+    @Json(name = "Name")
+    val name: String,
+
+    @Json(name = "Location")
+    val location: String,
+
+    @Json(name = "ShortLocation")
+    val shortLocation: String,
+
+    @Json(name = "ClientLocation")
+    val clientLocation: String,
+
+    @Json(name = "SlackMessageTS")
+    val slackMessageTS: String
+)
+{
+    public fun toJson() = klaxon.toJsonString(this)
+
+    companion object {
+        public fun fromJson(json: String) = klaxon.parse<ServerResponse>(json)
+    }
+}
