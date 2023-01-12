@@ -1,11 +1,9 @@
 package com.atom.letmein
 
-import android.app.ActivityManager
 import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
-import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.graphics.BitmapFactory
@@ -17,7 +15,6 @@ import android.view.View
 import android.widget.Button
 import android.widget.EditText
 import androidx.appcompat.app.AlertDialog
-import androidx.core.app.NotificationCompat
 import com.beust.klaxon.Json
 import org.java_websocket.client.WebSocketClient
 import org.java_websocket.handshake.ServerHandshake
@@ -29,9 +26,9 @@ private val klaxon = Klaxon()
 
 class MainActivity : AppCompatActivity() {
     // Declaring the notification items
-    lateinit var notificationManager: NotificationManager
-    lateinit var notificationChannel: NotificationChannel
-    lateinit var builder: Notification.Builder
+    private lateinit var notificationManager: NotificationManager
+    private lateinit var notificationChannel: NotificationChannel
+    private lateinit var builder: Notification.Builder
     private val channelId = "i.apps.notifications"
 
     // Declaring websocket items
@@ -50,7 +47,7 @@ class MainActivity : AppCompatActivity() {
     private fun initWebSocket(location: String) {
         val hostString = getString(R.string.wsURI)
         val wsURL = "wss://$hostString/knock/socket/$location"
-        val wsURI: URI? = URI(wsURL)
+        val wsURI = URI(wsURL)
 
         // Verify that name is filled in
         if (findViewById<EditText>(R.id.userName).text.isEmpty()) {
@@ -87,21 +84,21 @@ class MainActivity : AppCompatActivity() {
                     println(response?.toJson())
                     val id = response?.id?.split("_")?.last()?.toInt()
                     id?.let {
-                        when (response?.event) {
+                        when (response.event) {
                             "LOCATION" -> {
                                 if (idWS == 0) {
                                     idWS = it
-                                    sendPermanentPush(getString(R.string.req_sent), "${getString(R.string.req_sent_exp)} (${response?.currentTime}s)", it)
+                                    sendPermanentPush(getString(R.string.req_sent), "${getString(R.string.req_sent_exp)} (${response.currentTime}s)", it)
                                 }
                             }
-                            "COUNTDOWN" -> updatePush("${getString(R.string.req_sent_exp)} (${response?.currentTime}s)", it)
+                            "COUNTDOWN" -> updatePush("${getString(R.string.req_sent_exp)} (${response.currentTime}s)", it)
                             "TIMEOUT" -> {
                                 sendTemporaryPush(getString(R.string.req_timeout), getString(R.string.req_timeout_exp))
-                                this.close()
+                                this.close(0, "Request timed out")
                             }
                             "ACKNOWLEDGE" -> {
                                 sendTemporaryPush(getString(R.string.req_ack), getString(R.string.req_ack_exp))
-                                this.close()
+                                this.close(0, "Request was acknowledged")
                             }
                         }
                     }
@@ -122,7 +119,7 @@ class MainActivity : AppCompatActivity() {
                 sendTemporaryPush(getString(R.string.req_error), getString(R.string.req_error_exp), 2024)
                 idWS = 0
                 runOnUiThread { findViewById<Button>(R.id.cancelButton).visibility = View.INVISIBLE }
-                close()
+                close(0, "Ran into an error!")
             }
         }
     }
@@ -142,7 +139,7 @@ class MainActivity : AppCompatActivity() {
         // Add intent to return to application
         val actIntent = Intent(this, MainActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
-            setAction(Intent.ACTION_MAIN)
+            action = Intent.ACTION_MAIN
             addCategory(Intent.CATEGORY_LAUNCHER)
         }
         val pendingIntent: PendingIntent = PendingIntent.getActivity(this, 0, actIntent,
@@ -177,7 +174,7 @@ class MainActivity : AppCompatActivity() {
         // Add intent to return to application
         val actIntent = Intent(this, MainActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
-            setAction(Intent.ACTION_MAIN)
+            action = Intent.ACTION_MAIN
             addCategory(Intent.CATEGORY_LAUNCHER)
         }
         val pendingIntent: PendingIntent = PendingIntent.getActivity(this, 0, actIntent,
@@ -206,15 +203,15 @@ class MainActivity : AppCompatActivity() {
         println("running nvm")
         if (this::webSocketClient.isInitialized) {
             if (webSocketClient.isOpen) {
-                val payload = """{"Event":"NEVERMIND", "LOCATION": "${locationWS}"}"""
+                val payload = """{"Event":"NEVERMIND", "LOCATION": "$locationWS"}"""
                 webSocketClient.send(payload)
-                webSocketClient.close()
+                webSocketClient.close(0, "Request cancelled")
                 sendTemporaryPush(getString(R.string.req_cancel), getString(R.string.req_cancel_exp), 2024)
             }
         }
     }
 
-    fun showAlert(title: String, description: String) {
+    private fun showAlert(title: String, description: String) {
         val builder = AlertDialog.Builder(this)
         builder.setTitle(title)
         builder.setMessage(description)
@@ -276,9 +273,9 @@ data class ServerResponse (
     val slackMessageTS: String
 )
 {
-    public fun toJson() = klaxon.toJsonString(this)
+    fun toJson() = klaxon.toJsonString(this)
 
     companion object {
-        public fun fromJson(json: String) = klaxon.parse<ServerResponse>(json)
+        fun fromJson(json: String) = klaxon.parse<ServerResponse>(json)
     }
 }
