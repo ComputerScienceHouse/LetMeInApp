@@ -10,7 +10,7 @@
     <string name="first_elevator">Level 1 Elevator Lobby</string>
     <string name="l_well">L Well</string>
 
-    <string name="wsURI">letmein2-dev.cs.house</string>
+    <string name="wsURI">letmein.csh.rit.edu</string>
     <string name="req_sent">Your request has been sent! </string>
     <string name="req_sent_exp">Sit tight while we wait for someone to respond to your request!</string>
     <string name="req_timeout">Your request timed out! 🔴</string>
