@@ -125,6 +125,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     fun sendPermanentPush(subject: String, description: String, code: Int = 2023) {
+        // If this is a more recent Android SDK, use a notification channel
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             notificationChannel =
                 NotificationChannel(channelId, description, NotificationManager.IMPORTANCE_HIGH)
@@ -143,7 +144,7 @@ class MainActivity : AppCompatActivity() {
             addCategory(Intent.CATEGORY_LAUNCHER)
         }
         val pendingIntent: PendingIntent = PendingIntent.getActivity(this, 0, actIntent,
-            PendingIntent.FLAG_UPDATE_CURRENT)
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_MUTABLE)
 
         builder.setSmallIcon(R.drawable.csh_logo)
             .setLargeIcon(BitmapFactory.decodeResource(this.resources, R.drawable.csh_logo))
@@ -162,7 +163,7 @@ class MainActivity : AppCompatActivity() {
     fun sendTemporaryPush(subject: String, description: String, code: Int = 2023) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             notificationChannel =
-                NotificationChannel(channelId, description, NotificationManager.IMPORTANCE_LOW)
+                NotificationChannel(channelId, description, NotificationManager.IMPORTANCE_HIGH)
             notificationChannel.lightColor = Color.MAGENTA
             notificationManager.createNotificationChannel(notificationChannel)
 
@@ -178,7 +179,7 @@ class MainActivity : AppCompatActivity() {
             addCategory(Intent.CATEGORY_LAUNCHER)
         }
         val pendingIntent: PendingIntent = PendingIntent.getActivity(this, 0, actIntent,
-            PendingIntent.FLAG_UPDATE_CURRENT)
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
 
         builder.setSmallIcon(R.drawable.csh_logo)
             .setLargeIcon(BitmapFactory.decodeResource(this.resources, R.drawable.csh_logo))
@@ -196,6 +197,9 @@ class MainActivity : AppCompatActivity() {
         builder.setContentText(description)
             .style = Notification.BigTextStyle()
             .bigText(description)
+
+        // Using the same notification code simply updates the old notification
+        // Please ensure that your notification has .onlyAlertOnce(true) if using this
         notificationManager.notify(code, builder.build())
     }
 
