@@ -19,4 +19,6 @@
     <string name="req_ack_exp">Someone answered your request! They will be arriving shortly.</string>
     <string name="req_error">Connection failed! 🔴</string>
     <string name="req_error_exp">Unfortunately, there was an error in your request. Please try again later.</string>
+    <string name="req_cancel">Request cancelled! 🟡</string>
+    <string name="req_cancel_exp">Your request was cancelled! If you believe this was by mistake, try again.</string>
 </resources>

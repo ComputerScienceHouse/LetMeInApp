@@ -96,6 +96,17 @@
             android:layout_centerHorizontal="true"
             android:layout_below="@id/northButton"
             android:onClick="reqSouthStairwell"/>
+
+        <Button
+            android:id="@+id/cancelButton"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_below="@id/southButton"
+            android:layout_centerHorizontal="true"
+            android:backgroundTint="@color/secondary"
+            android:onClick="sendNVM"
+            android:text="@string/cancel"
+            android:visibility="invisible"/>
     </RelativeLayout>
 
 </androidx.constraintlayout.widget.ConstraintLayout>

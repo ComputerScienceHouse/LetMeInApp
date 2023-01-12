@@ -1,17 +1,23 @@
 package com.atom.letmein
 
+import android.app.ActivityManager
 import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
+import android.app.PendingIntent
+import android.content.BroadcastReceiver
 import android.content.Context
+import android.content.Intent
 import android.graphics.BitmapFactory
 import android.graphics.Color
 import android.os.Build
 import androidx.appcompat.app.AppCompatActivity
 import android.os.Bundle
 import android.view.View
+import android.widget.Button
 import android.widget.EditText
 import androidx.appcompat.app.AlertDialog
+import androidx.core.app.NotificationCompat
 import com.beust.klaxon.Json
 import org.java_websocket.client.WebSocketClient
 import org.java_websocket.handshake.ServerHandshake
@@ -22,15 +28,18 @@ import com.beust.klaxon.*
 private val klaxon = Klaxon()
 
 class MainActivity : AppCompatActivity() {
+    // Declaring the notification items
     lateinit var notificationManager: NotificationManager
     lateinit var notificationChannel: NotificationChannel
     lateinit var builder: Notification.Builder
     private val channelId = "i.apps.notifications"
 
+    // Declaring websocket items
     private lateinit var webSocketClient: WebSocketClient
-    companion object {
-        const val TAG = "LETMEIN"
-    }
+    private var locationWS: String = ""
+    private var idWS: Int = 0
+
+    // Function called on creation of activity
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
@@ -43,10 +52,13 @@ class MainActivity : AppCompatActivity() {
         val wsURL = "wss://$hostString/knock/socket/$location"
         val wsURI: URI? = URI(wsURL)
 
+        // Verify that name is filled in
         if (findViewById<EditText>(R.id.userName).text.isEmpty()) {
             showAlert("Error", "Missing name!")
             return
         }
+
+        // Verify that web socket isn't in use
         if (this::webSocketClient.isInitialized) {
             if (webSocketClient.isOpen) {
                 showAlert("Error", "There is already a request running!")
@@ -60,13 +72,13 @@ class MainActivity : AppCompatActivity() {
 
     private fun createWebSocketClient(wsURI: URI?, location: String) {
         webSocketClient = object : WebSocketClient(wsURI) {
-            var idWS: Int = 0
+
             override fun onOpen(handshakedata: ServerHandshake?) {
                 println("Connection opened!")
                 val name = findViewById<EditText>(R.id.userName).text
                 val payload = """{"Event": "NAME", "Name": "$name", "Location": "$location"}"""
                 send(payload)
-                //TODO("link nvm button")
+                runOnUiThread { findViewById<Button>(R.id.cancelButton).visibility = View.VISIBLE }
             }
 
             override fun onMessage(message: String?) {
@@ -99,6 +111,8 @@ class MainActivity : AppCompatActivity() {
             override fun onClose(code: Int, reason: String?, remote: Boolean) {
                 println("Connection was closed! Reason: $reason")
                 notificationManager.cancel(idWS)
+                idWS = 0
+                runOnUiThread { findViewById<Button>(R.id.cancelButton).visibility = View.INVISIBLE }
             }
 
             override fun onError(ex: Exception?) {
@@ -106,6 +120,9 @@ class MainActivity : AppCompatActivity() {
                 ex?.printStackTrace()
                 notificationManager.cancel(idWS)
                 sendTemporaryPush(getString(R.string.req_error), getString(R.string.req_error_exp), 2024)
+                idWS = 0
+                runOnUiThread { findViewById<Button>(R.id.cancelButton).visibility = View.INVISIBLE }
+                close()
             }
         }
     }
@@ -121,6 +138,16 @@ class MainActivity : AppCompatActivity() {
         } else {
             builder = Notification.Builder(this)
         }
+
+        // Add intent to return to application
+        val actIntent = Intent(this, MainActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
+            setAction(Intent.ACTION_MAIN)
+            addCategory(Intent.CATEGORY_LAUNCHER)
+        }
+        val pendingIntent: PendingIntent = PendingIntent.getActivity(this, 0, actIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT)
+
         builder.setSmallIcon(R.drawable.csh_logo)
             .setLargeIcon(BitmapFactory.decodeResource(this.resources, R.drawable.csh_logo))
             .setContentTitle(subject)
@@ -128,6 +155,7 @@ class MainActivity : AppCompatActivity() {
             .setAutoCancel(false)
             .setOngoing(true)
             .setOnlyAlertOnce(true)
+            .setContentIntent(pendingIntent)
             .setColor(Color.rgb(55, 0, 179))
             .style = Notification.BigTextStyle()
             .bigText(description)
@@ -145,10 +173,22 @@ class MainActivity : AppCompatActivity() {
         } else {
             builder = Notification.Builder(this)
         }
+
+        // Add intent to return to application
+        val actIntent = Intent(this, MainActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
+            setAction(Intent.ACTION_MAIN)
+            addCategory(Intent.CATEGORY_LAUNCHER)
+        }
+        val pendingIntent: PendingIntent = PendingIntent.getActivity(this, 0, actIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT)
+
         builder.setSmallIcon(R.drawable.csh_logo)
             .setLargeIcon(BitmapFactory.decodeResource(this.resources, R.drawable.csh_logo))
             .setContentTitle(subject)
             .setContentText(description)
+            .setContentIntent(pendingIntent)
+            .setAutoCancel(true)
             .setColor(Color.rgb(55, 0, 179))
             .style = Notification.BigTextStyle()
             .bigText(description)
@@ -162,6 +202,17 @@ class MainActivity : AppCompatActivity() {
         notificationManager.notify(code, builder.build())
     }
 
+    fun sendNVM(view: View) {
+        println("running nvm")
+        if (this::webSocketClient.isInitialized) {
+            if (webSocketClient.isOpen) {
+                val payload = """{"Event":"NEVERMIND", "LOCATION": "${locationWS}"}"""
+                webSocketClient.send(payload)
+                webSocketClient.close()
+                sendTemporaryPush(getString(R.string.req_cancel), getString(R.string.req_cancel_exp), 2024)
+            }
+        }
+    }
 
     fun showAlert(title: String, description: String) {
         val builder = AlertDialog.Builder(this)
@@ -195,7 +246,6 @@ class MainActivity : AppCompatActivity() {
         initWebSocket("s_stairs")
     }
 }
-
 
 data class ServerResponse (
     @Json(name = "ID")
