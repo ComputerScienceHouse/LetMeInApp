@@ -94,11 +94,11 @@ class MainActivity : AppCompatActivity() {
                             "COUNTDOWN" -> updatePush("${getString(R.string.req_sent_exp)} (${response.currentTime}s)", it)
                             "TIMEOUT" -> {
                                 sendTemporaryPush(getString(R.string.req_timeout), getString(R.string.req_timeout_exp))
-                                this.close(0, "Request timed out")
+                                this.close(1000, "Request timed out")
                             }
                             "ACKNOWLEDGE" -> {
                                 sendTemporaryPush(getString(R.string.req_ack), getString(R.string.req_ack_exp))
-                                this.close(0, "Request was acknowledged")
+                                this.close(1000, "Request was acknowledged")
                             }
                         }
                     }
@@ -119,7 +119,7 @@ class MainActivity : AppCompatActivity() {
                 sendTemporaryPush(getString(R.string.req_error), getString(R.string.req_error_exp), 2024)
                 idWS = 0
                 runOnUiThread { findViewById<Button>(R.id.cancelButton).visibility = View.INVISIBLE }
-                close(0, "Ran into an error!")
+                close(1000, "Ran into an error!")
             }
         }
     }
@@ -205,7 +205,7 @@ class MainActivity : AppCompatActivity() {
             if (webSocketClient.isOpen) {
                 val payload = """{"Event":"NEVERMIND", "LOCATION": "$locationWS"}"""
                 webSocketClient.send(payload)
-                webSocketClient.close(0, "Request cancelled")
+                webSocketClient.close(1000, "Request cancelled")
                 sendTemporaryPush(getString(R.string.req_cancel), getString(R.string.req_cancel_exp), 2024)
             }
         }
